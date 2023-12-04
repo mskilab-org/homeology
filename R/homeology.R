@@ -1,5 +1,32 @@
-hom = function (event, pad = 100, thresh = 2, stride = 1, pad2 = 5,
-                flip = FALSE, mc.cores = 1, anchor = TRUE, deanchor_gm = TRUE,
+#' @name hom
+#'
+#' @param event data.table of junctions 
+#' @param pad width around junction breakpoint around which to search for homeology
+#' @param thresh string distance threshold for calling homeology in a bin
+#' @param stride distance in bases between consecutive bins in which we will be measuring homeology
+#' @param pad2 number of bases of padding around each sequence position (bin) to use when computing homeology
+#' @param flip if flip = FALSE, homeology search for -/- and +/+ junctions is done between a sequence and its reverse complement
+#' @param mc.cores number of cores to use
+#' @param anchor 
+#' @param deanchor_gm 
+#' @param mat 
+#' @param genome 
+#' @param bidirected_search 
+#' @param save_gm 
+#'
+#' @return
+#' @export
+#'
+#' @examples
+hom = function (event, 
+                pad = 100, 
+                thresh = 2, 
+                stride = 1, 
+                pad2 = 5,
+                flip = FALSE, 
+                mc.cores = 1, 
+                anchor = TRUE, 
+                deanchor_gm = TRUE,
                 mat = FALSE,
                 genome = "/gpfs/commons/home/khadi/DB/GATK/human_g1k_v37.fasta.2bit",
                 bidirected_search = TRUE,
@@ -10,6 +37,7 @@ hom = function (event, pad = 100, thresh = 2, stride = 1, pad2 = 5,
   }
   event = copy2(event)
   ## event = data.table(bp1 = gr.string(event$left), bp2 = gr.string(event$right))
+  
   gmfeat = function(gm, thresh = 3, op = "<=") {
     if (is(gm, "gMatrix")) {
       mat = gm$mat
@@ -52,6 +80,8 @@ hom = function (event, pad = 100, thresh = 2, stride = 1, pad2 = 5,
     }
     return(res)
   }
+  
+  #stats function for gmatrix
   gmstats = function(res) {
     if (NROW(res) > 0) {
       res[!duplicated(k)][
@@ -72,6 +102,7 @@ hom = function (event, pad = 100, thresh = 2, stride = 1, pad2 = 5,
     }
     else data.table(numfeat = 0, maxfeat = 0)
   }
+  
   evbp1 = gr.end(gr.flipstrand(parse.gr(event$bp1)))
   if (flip)
     evbp2 = gr.flipstrand(gr.end(parse.gr(event$bp2)))
@@ -90,8 +121,10 @@ hom = function (event, pad = 100, thresh = 2, stride = 1, pad2 = 5,
     bp2dir = if (flip) "end" else "start"
     query.bp2 = gr.resize(evbp2, pad * 2, pad = FALSE, fix = bp2dir)
   } # querying by both sides of junction, or just looking in the direction of the fused side of junction
+  
   event$query.bp1 = gr.string(query.bp1)
   event$query.bp2 = gr.string(query.bp2)
+  
   seq1 = ffTrack::get_seq(genome,
                           query.bp1)
   seq2 = ffTrack::get_seq(genome,
@@ -171,18 +204,19 @@ conform_si = function(x, si) {
   return(ans)
 }
 
-#' @param junctions
-#' @param width
-#' @param pad
-#' @param stride
-#' @param genome
-#' @param cores
-#' @param outdir
-#' @param flip
-#' @param bidirectional
-#' @param annotate
-#' @param savegMatrix
-#' @param thresh
+#' @name homeology.run
+#' @param junctions Path to .vcf or bedpe or rds file of junctions or gGraph from which alt edges will be taken
+#' @param width width around junction breakpoint around which to search for homeology
+#' @param pad number of bases of padding around each sequence position (bin) to use when computing homeology, i.e. we then will be comparing 1 + 2*pad -mer sequences for edit distance
+#' @param thresh string distance threshold for calling homeology in a bin
+#' @param stride distance in bases between consecutive bins in which we will be measuring homeology
+#' @param genome Path to .2bit or ffTrack .rds containing genome sequence
+#' @param cores How many cores to use
+#' @param flip if flip = FALSE, homeology search for -/- and +/+ junctions is done between a sequence and its reverse complement
+#' @param bidirectional adding padding on both sides of each breakpoint (TRUE) or only in the direction of the fused side (FALSE)
+#' @param annotate annotate edges in gGraph object and save it in working directory
+#' @param savegMatrix save gMatrix object of edit distances
+#' @param outdir output directory 
 #'
 #' @import skitools
 #' @import skidb
@@ -195,8 +229,6 @@ conform_si = function(x, si) {
 #' @importFrom rtracklayer TwoBitFile
 #' @import purrr
 #' @import imager
-
-
 homeology.run <- function(junctions,
                       width = 50,
                       pad = 0,
@@ -204,17 +236,17 @@ homeology.run <- function(junctions,
                       stride = 0,
                       genome,
                       cores,
-                      outdir,
                       flip = FALSE,
                       bidirectional = TRUE,
                       annotate = TRUE,
-                      savegMatrix = TRUE) {
+                      savegMatrix = TRUE,
+                      outdir = "./") {
 
   setDTthreads(1)
 
   system(paste('mkdir -p', outdir))
 
-  gg = tryCatch(gG(junction = junctions), error = function(e) NULL)
+  gg = tryCatch(gG(junctions = junctions), error = function(e) NULL)
 
   if (is.null(gg))
     gg = tryCatch(readRDS(junctions), error = function(e) NULL)
@@ -253,7 +285,7 @@ homeology.run <- function(junctions,
   }
 
   events = data.table(bp1 = gr.string(gr.nochr(junctions$left)),
-                      bp2 = gr.string(gr.nochr(junctions$right)))[1]
+                      bp2 = gr.string(gr.nochr(junctions$right)))
 
   print(events)
 
@@ -340,6 +372,4 @@ homeology.run <- function(junctions,
   saveRDS(res[[1]], paste(outdir, 'gMatrixList.rds', sep = '/'))
 
 }
-
-
 
